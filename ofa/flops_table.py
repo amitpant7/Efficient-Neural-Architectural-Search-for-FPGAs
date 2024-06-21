@@ -6,7 +6,7 @@ import numpy as np
 from ofa.utils.layers import *
 
 
-#arth Int = arthemetic intensity
+# arth Int = arthemetic intensity
 __all__ = ["ArthIntTable"]
 
 
@@ -64,10 +64,11 @@ class ArthIntTable:
 
         return latency
 
-
-#meansure macs of single layers 
+    # meansure macs of single layers
     @torch.no_grad()
-    def measure_single_layer_arthemetic_intensity(self, layer: nn.Module, input_size: tuple):
+    def measure_single_layer_arthemetic_intensity(
+        self, layer: nn.Module, input_size: tuple
+    ):
         import thop
 
         inputs = torch.randn(*input_size, device=self.device)
@@ -75,19 +76,17 @@ class ArthIntTable:
         network.eval()
         # rm_bn_from_net(network)
         flops, params = thop.profile(network, (inputs,), verbose=False)
-        
-        size = params*4  # in bytess
-        
-        return [flops , size]
 
+        size = params * 4  # in bytess
 
-#measure macs for different resoultion 
+        return [flops, size]
+
+    # measure macs for different resoultion
     def build_lut(self, batch_size=1, resolutions=[224]):
         for resolution in resolutions:
             self.build_single_lut(batch_size, resolution)
 
-        np.save('local_lut.npy', self.efficiency_dict)
-
+        np.save("local_lut.npy", self.efficiency_dict)
 
     def build_single_lut(self, batch_size=1, base_resolution=224):
         print(
@@ -365,16 +364,18 @@ class ArthIntTable:
                         "act_func": act,
                         "use_se": se,
                     },
-                    "shortcut": {
-                        "name": IdentityLayer.__name__,
-                        "in_channels": in_channels,
-                        "out_channels": out_channels,
-                    }
-                    if (in_channels == out_channels and stride == 1)
-                    else None,
+                    "shortcut": (
+                        {
+                            "name": IdentityLayer.__name__,
+                            "in_channels": in_channels,
+                            "out_channels": out_channels,
+                        }
+                        if (in_channels == out_channels and stride == 1)
+                        else None
+                    ),
                 }
                 sub_dict = {}
-                
+
                 for ks in ks_list:
                     for e in expand_list:
                         build_config = copy.deepcopy(template_config)
@@ -386,7 +387,9 @@ class ArthIntTable:
 
                         if self.pred_type == "arthemetic_intensity":
                             measure_result = (
-                                self.measure_single_layer_arthemetic_intensity(layer, input_shape)
+                                self.measure_single_layer_arthemetic_intensity(
+                                    layer, input_shape
+                                )
                             )
                         elif self.pred_type == "latency":
                             measure_result = self.measure_single_layer_latency(
@@ -426,8 +429,8 @@ class ArthIntTable:
                 input_shape = (batch_size, in_channels, input_size, input_size)
 
                 if self.pred_type == "arthemetic_intensity":
-                    measure_result = (
-                        self.measure_single_layer_arthemetic_intensity(layer, input_shape)
+                    measure_result = self.measure_single_layer_arthemetic_intensity(
+                        layer, input_shape
                     )
                 elif self.pred_type == "latency":
                     measure_result = self.measure_single_layer_latency(
@@ -448,11 +451,10 @@ class ArthIntTable:
                 layer = LinearLayer.build_from_config(build_config)
                 input_shape = (batch_size, in_channels)
 
-
-#Buiulding the table
+                # Buiulding the table
                 if self.pred_type == "arthemetic_intensity":
-                    measure_result = (
-                        self.measure_single_layer_arthemetic_intensity(layer, input_shape)
+                    measure_result = self.measure_single_layer_arthemetic_intensity(
+                        layer, input_shape
                     )
                 elif self.pred_type == "latency":
                     measure_result = self.measure_single_layer_latency(
@@ -477,13 +479,12 @@ class ArthIntTable:
         assert "ks" in sample and "e" in sample and "d" in sample
         assert len(sample["ks"]) == len(sample["e"]) and len(sample["ks"]) == 20
         assert len(sample["d"]) == 5
-        
-        if self.pred_type == 'arthemetic_intensity':
+
+        if self.pred_type == "arthemetic_intensity":
             AI = True
-            
-        
+
         total_stats = [0.0, 0.0]
-        
+
         for i in range(20):
             stage = i // 4
             depth_max = sample["d"][stage]
@@ -493,39 +494,49 @@ class ArthIntTable:
             ks, e = sample["ks"][i], sample["e"][i]
 
             total_stats[0] += (
-                self.efficiency_dict[input_size]["mobile_inverted_blocks"][i + 1][(ks, e)][0]
+                self.efficiency_dict[input_size]["mobile_inverted_blocks"][i + 1][
+                    (ks, e)
+                ][0]
                 if AI
-                else self.efficiency_dict[input_size]["mobile_inverted_blocks"][i + 1][(ks, e)])
+                else self.efficiency_dict[input_size]["mobile_inverted_blocks"][i + 1][
+                    (ks, e)
+                ]
+            )
 
             total_stats[1] += (
-                self.efficiency_dict[input_size]["mobile_inverted_blocks"][i + 1][(ks, e)][1]
-                if AI 
-                else 0)
+                self.efficiency_dict[input_size]["mobile_inverted_blocks"][i + 1][
+                    (ks, e)
+                ][1]
+                if AI
+                else 0
+            )
 
         for key in self.efficiency_dict[input_size]["other_blocks"]:
-            total_stats[0] += (self.efficiency_dict[input_size]["other_blocks"][key][0]
-                               if AI
-                               else self.efficiency_dict[input_size]["other_blocks"][key])
+            total_stats[0] += (
+                self.efficiency_dict[input_size]["other_blocks"][key][0]
+                if AI
+                else self.efficiency_dict[input_size]["other_blocks"][key]
+            )
             total_stats[1] += (
-                self.efficiency_dict[input_size]["other_blocks"][key][1]
-                if AI 
-                else 0)
+                self.efficiency_dict[input_size]["other_blocks"][key][1] if AI else 0
+            )
 
-        
-        total_stats[0] += (self.efficiency_dict[input_size]["mobile_inverted_blocks"][0][(3, 1)][0] 
-                           if AI 
-                           else self.efficiency_dict[input_size]["mobile_inverted_blocks"][0][(3, 1)])
+        total_stats[0] += (
+            self.efficiency_dict[input_size]["mobile_inverted_blocks"][0][(3, 1)][0]
+            if AI
+            else self.efficiency_dict[input_size]["mobile_inverted_blocks"][0][(3, 1)]
+        )
 
         total_stats[1] += (
-                self.efficiency_dict[input_size]["mobile_inverted_blocks"][0][(3, 1)][1]
-                if AI 
-                else 0)
+            self.efficiency_dict[input_size]["mobile_inverted_blocks"][0][(3, 1)][1]
+            if AI
+            else 0
+        )
 
-        
-        #for consistance of comparision,(betn latency and AI, as latency is required lower and AI higher)
-        if self.pred_type == 'arthemetic_intensity':
-            intensity = total_stats[0]/total_stats[1]  #ops/bytes
+        # for consistance of comparision,(betn latency and AI, as latency is required lower and AI higher)
+        if self.pred_type == "arthemetic_intensity":
+            intensity = total_stats[0] / total_stats[1]  # ops/bytes
             return 1 / intensity
-        
+
         else:
             return total_stats[0]
